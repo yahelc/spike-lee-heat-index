@@ -1,0 +1,650 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>The Spike Lee Heat Index (Updated)</title>
+<meta name="description" content="An updated, interactive version of Slate's Spike Lee Heat Index — the hotter the Spike Lee movie, the better it is.">
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Oswald:wght@400;600;700&family=Source+Sans+3:wght@400;600;700&display=swap');
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Source Sans 3', sans-serif;
+    background: linear-gradient(180deg, #f7a541 0%, #f57e20 30%, #e85d26 60%, #d4431e 100%);
+    min-height: 100vh;
+    color: #2a1a0a;
+  }
+
+  header {
+    text-align: center;
+    padding: 2rem 1rem 0.5rem;
+  }
+
+  header h1 {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 700;
+    font-size: clamp(2rem, 5vw, 3.5rem);
+    color: #fff;
+    text-shadow: 2px 3px 6px rgba(0,0,0,0.3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    line-height: 1.1;
+  }
+
+  header p.subtitle {
+    font-size: clamp(0.9rem, 2vw, 1.15rem);
+    color: #fff3e0;
+    margin-top: 0.5rem;
+    font-weight: 400;
+    max-width: 600px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .chart-container {
+    max-width: 1100px;
+    margin: 1.5rem auto;
+    padding: 0 1rem;
+    position: relative;
+  }
+
+  .chart-wrapper {
+    background: rgba(255,255,255,0.92);
+    border-radius: 16px;
+    padding: 2rem 1.5rem 1.5rem 1.5rem;
+    box-shadow: 0 8px 40px rgba(0,0,0,0.18);
+    position: relative;
+    overflow-x: auto;
+  }
+
+  .chart-inner {
+    position: relative;
+    min-width: 800px;
+    height: 560px;
+  }
+
+  .axis-label-y {
+    position: absolute;
+    left: -10px;
+    top: 50%;
+    transform: rotate(-90deg) translateX(-50%);
+    transform-origin: 0 0;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #b54a1a;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    white-space: nowrap;
+  }
+
+  .axis-label-x {
+    text-align: center;
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #b54a1a;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-top: 0.5rem;
+  }
+
+  svg.chart {
+    width: 100%;
+    height: 100%;
+    overflow: visible;
+  }
+
+  .grid-line {
+    stroke: #e8d5c4;
+    stroke-width: 1;
+  }
+
+  .tick-label {
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 12px;
+    fill: #99735a;
+  }
+
+  .dot {
+    cursor: pointer;
+    transition: r 0.2s ease, filter 0.2s ease;
+  }
+
+  .dot:hover {
+    filter: drop-shadow(0 0 6px rgba(180, 60, 20, 0.6));
+  }
+
+  .film-label {
+    font-family: 'Oswald', sans-serif;
+    font-size: 10.5px;
+    font-weight: 600;
+    fill: #3a1e0a;
+    cursor: pointer;
+    text-transform: uppercase;
+    pointer-events: all;
+  }
+
+  .film-label:hover {
+    fill: #c0421a;
+  }
+
+  .new-film .film-label {
+    fill: #1a5c3a;
+  }
+
+  .new-film .film-label:hover {
+    fill: #0d7a3e;
+  }
+
+  .trend-line {
+    stroke: #d45030;
+    stroke-width: 2;
+    stroke-dasharray: 8 4;
+    fill: none;
+    opacity: 0.5;
+  }
+
+  .thermometer {
+    position: absolute;
+    left: 40px;
+    top: 20px;
+    width: 30px;
+    height: 420px;
+    pointer-events: none;
+  }
+
+  .legend {
+    display: flex;
+    justify-content: center;
+    gap: 2rem;
+    margin-top: 1rem;
+    font-size: 0.85rem;
+    flex-wrap: wrap;
+  }
+
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+
+  .legend-dot {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    display: inline-block;
+  }
+
+  .legend-dot.original { background: #e05525; }
+  .legend-dot.new { background: #2d8f55; }
+
+  /* Modal */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.65);
+    z-index: 1000;
+    justify-content: center;
+    align-items: center;
+    padding: 1rem;
+    animation: fadeIn 0.2s ease;
+  }
+
+  .modal-overlay.active { display: flex; }
+
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes slideUp { from { transform: translateY(30px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+  .modal {
+    background: #fff;
+    border-radius: 16px;
+    max-width: 420px;
+    width: 100%;
+    overflow: hidden;
+    box-shadow: 0 20px 60px rgba(0,0,0,0.4);
+    animation: slideUp 0.25s ease;
+    position: relative;
+  }
+
+  .modal-close {
+    position: absolute;
+    top: 12px;
+    right: 14px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(0,0,0,0.5);
+    color: #fff;
+    font-size: 1.2rem;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10;
+    transition: background 0.15s;
+  }
+
+  .modal-close:hover { background: rgba(0,0,0,0.7); }
+
+  .modal-poster {
+    width: 100%;
+    height: 280px;
+    object-fit: cover;
+    display: block;
+    background: linear-gradient(135deg, #e85d26, #f7a541);
+  }
+
+  .modal-poster-placeholder {
+    width: 100%;
+    height: 280px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Oswald', sans-serif;
+    font-size: 2rem;
+    font-weight: 700;
+    color: #fff;
+    text-transform: uppercase;
+    text-align: center;
+    padding: 2rem;
+    text-shadow: 2px 2px 8px rgba(0,0,0,0.3);
+  }
+
+  .modal-body {
+    padding: 1.5rem;
+  }
+
+  .modal-title {
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #2a1a0a;
+    text-transform: uppercase;
+  }
+
+  .modal-year {
+    font-size: 1rem;
+    color: #8a6a50;
+    margin-bottom: 1rem;
+  }
+
+  .modal-stats {
+    display: flex;
+    gap: 1.5rem;
+    margin-bottom: 1.25rem;
+  }
+
+  .modal-stat {
+    text-align: center;
+  }
+
+  .modal-stat-value {
+    font-family: 'Oswald', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 700;
+    line-height: 1;
+  }
+
+  .modal-stat-value.rt { color: #e05525; }
+  .modal-stat-value.temp { color: #d4431e; }
+
+  .modal-stat-label {
+    font-size: 0.75rem;
+    color: #8a6a50;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  .modal-links {
+    display: flex;
+    gap: 0.75rem;
+  }
+
+  .modal-link {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.4rem;
+    padding: 0.65rem 1rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 600;
+    font-size: 0.9rem;
+    transition: transform 0.1s, box-shadow 0.15s;
+  }
+
+  .modal-link:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  }
+
+  .modal-link.imdb {
+    background: #f5c518;
+    color: #000;
+  }
+
+  .modal-link.justwatch {
+    background: #ffd740;
+    color: #1a1a2e;
+  }
+
+  .new-badge {
+    display: inline-block;
+    background: #2d8f55;
+    color: #fff;
+    font-size: 0.65rem;
+    font-weight: 700;
+    padding: 2px 6px;
+    border-radius: 4px;
+    margin-left: 0.5rem;
+    vertical-align: middle;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+  }
+
+  footer {
+    text-align: center;
+    padding: 2rem 1rem 3rem;
+    color: #fff3e0;
+    font-size: 0.85rem;
+    max-width: 700px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  footer a {
+    color: #fff;
+    text-decoration: underline;
+    text-underline-offset: 2px;
+  }
+
+  footer a:hover { opacity: 0.85; }
+
+  @media (max-width: 600px) {
+    .chart-wrapper { padding: 1rem 0.5rem 1rem 0.5rem; }
+    .modal { max-width: 95vw; }
+    .modal-poster, .modal-poster-placeholder { height: 200px; }
+    .modal-stats { gap: 1rem; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>The Spike Lee<br>Heat Index</h1>
+  <p class="subtitle">The hotter the Spike Lee movie, the better it is. Updated with all his films through 2025.</p>
+</header>
+
+<div class="chart-container">
+  <div class="chart-wrapper">
+    <div class="chart-inner" id="chartInner">
+      <div class="axis-label-y">Temperature (&deg;F)</div>
+      <svg class="chart" id="chart" viewBox="0 0 800 520"></svg>
+      <div class="axis-label-x">Rotten Tomatoes Rating</div>
+    </div>
+    <div class="legend">
+      <div class="legend-item"><span class="legend-dot original"></span> Original films (2012 chart)</div>
+      <div class="legend-item"><span class="legend-dot new"></span> Added in this update</div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modal">
+    <button class="modal-close" id="modalClose" aria-label="Close">&times;</button>
+    <div id="modalPosterContainer"></div>
+    <div class="modal-body">
+      <div class="modal-title" id="modalTitle"></div>
+      <div class="modal-year" id="modalYear"></div>
+      <div class="modal-stats">
+        <div class="modal-stat">
+          <div class="modal-stat-value rt" id="modalRT"></div>
+          <div class="modal-stat-label">Rotten Tomatoes</div>
+        </div>
+        <div class="modal-stat">
+          <div class="modal-stat-value temp" id="modalTemp"></div>
+          <div class="modal-stat-label">Temperature</div>
+        </div>
+      </div>
+      <div class="modal-links" id="modalLinks"></div>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <p>
+    This is an updated, interactive version of
+    <a href="https://web.archive.org/web/20130221231939/http://www.slate.com/blogs/browbeat/2012/08/10/the_spike_lee_heat_index_the_hotter_the_spike_lee_movie_the_better_it_is_.html" target="_blank" rel="noopener">
+      "The Spike Lee Heat Index"</a>
+    originally published by <strong>Slate</strong> in August 2012 by Browbeat.
+    The original concept and temperatures for the 2012 films are borrowed from that piece.
+    Temperatures for newer films are estimated based on their settings and on-screen climate.
+    All Rotten Tomatoes scores have been updated to reflect current ratings.
+  </p>
+</footer>
+
+<script>
+const films = [
+  { title: "She's Gotta Have It", year: 1986, temp: 93, rt: 94, isNew: false, imdb: "tt0091939", jw: "shes-gotta-have-it", poster: "shes-gotta-have-it-1986", gradient: ["#8e2441","#c7475e"] },
+  { title: "School Daze", year: 1988, temp: 82, rt: 58, isNew: false, imdb: "tt0096054", jw: "school-daze", poster: "school-daze-1988", gradient: ["#b5651d","#e8a33d"] },
+  { title: "Do the Right Thing", year: 1989, temp: 100, rt: 92, isNew: false, imdb: "tt0097216", jw: "do-the-right-thing", poster: "do-the-right-thing-1989", gradient: ["#cc2200","#ff6633"] },
+  { title: "Mo' Better Blues", year: 1990, temp: 45, rt: 71, isNew: false, imdb: "tt0100168", jw: "mo-better-blues", poster: "mo-better-blues-1990", gradient: ["#1a3a5c","#3a7abd"] },
+  { title: "Jungle Fever", year: 1991, temp: 68, rt: 81, isNew: false, imdb: "tt0102175", jw: "jungle-fever", poster: "jungle-fever-1991", gradient: ["#2d5a27","#5ea450"] },
+  { title: "Malcolm X", year: 1992, temp: 62, rt: 89, isNew: true, imdb: "tt0104797", jw: "malcolm-x", poster: "malcolm-x-1992", gradient: ["#1a1a2e","#4a3f6b"] },
+  { title: "Crooklyn", year: 1994, temp: 95, rt: 79, isNew: false, imdb: "tt0109504", jw: "crooklyn", poster: "crooklyn-1994", gradient: ["#c44e20","#e8944a"] },
+  { title: "Clockers", year: 1995, temp: 88, rt: 75, isNew: false, imdb: "tt0112688", jw: "clockers", poster: "clockers-1995", gradient: ["#5c1a1a","#a03030"] },
+  { title: "Girl 6", year: 1996, temp: 85, rt: 39, isNew: false, imdb: "tt0116414", jw: "girl-6", poster: "girl-6-1996", gradient: ["#8b1a6e","#c74aa0"] },
+  { title: "Get on the Bus", year: 1996, temp: 42, rt: 89, isNew: false, imdb: "tt0116404", jw: "get-on-the-bus", poster: "get-on-the-bus-1996", gradient: ["#1a4a1a","#3a8a3a"] },
+  { title: "He Got Game", year: 1998, temp: 68, rt: 82, isNew: false, imdb: "tt0124718", jw: "he-got-game", poster: "he-got-game-1998", gradient: ["#333366","#6666aa"] },
+  { title: "Summer of Sam", year: 1999, temp: 95, rt: 50, isNew: false, imdb: "tt0162677", jw: "summer-of-sam", poster: "summer-of-sam-1999", gradient: ["#8b0000","#cc3333"] },
+  { title: "Bamboozled", year: 2000, temp: 48, rt: 53, isNew: false, imdb: "tt0215545", jw: "bamboozled", poster: "bamboozled-2000", gradient: ["#4a3520","#8a6540"] },
+  { title: "25th Hour", year: 2002, temp: 38, rt: 79, isNew: false, imdb: "tt0307901", jw: "25th-hour", poster: "25th-hour-2002", gradient: ["#1a2a4a","#3a5a8a"] },
+  { title: "She Hate Me", year: 2004, temp: 55, rt: 19, isNew: false, imdb: "tt0384533", jw: "she-hate-me", poster: "she-hate-me-2004", gradient: ["#5a1a2a","#9a3a4a"] },
+  { title: "Inside Man", year: 2006, temp: 72, rt: 86, isNew: false, imdb: "tt0454848", jw: "inside-man", poster: "inside-man-2006", gradient: ["#1a3050","#3a6090"] },
+  { title: "Miracle at St. Anna", year: 2008, temp: 32, rt: 33, isNew: false, imdb: "tt1046997", jw: "miracle-at-st-anna", poster: "miracle-at-st-anna-2008", gradient: ["#3a4a30","#6a8a50"] },
+  { title: "Red Hook Summer", year: 2012, temp: 92, rt: 57, isNew: false, imdb: "tt2114490", jw: "red-hook-summer", poster: "red-hook-summer-2012", gradient: ["#a03020","#d06040"] },
+  { title: "Oldboy", year: 2013, temp: 50, rt: 39, isNew: true, imdb: "tt1321511", jw: "oldboy-2013", poster: "oldboy-2013", gradient: ["#2a1a3a","#5a3a6a"] },
+  { title: "Da Sweet Blood of Jesus", year: 2014, temp: 80, rt: 49, isNew: true, imdb: "tt3110720", jw: "da-sweet-blood-of-jesus", poster: "da-sweet-blood-2014", gradient: ["#6a1a2a","#aa3a4a"] },
+  { title: "Chi-Raq", year: 2015, temp: 88, rt: 82, isNew: true, imdb: "tt4594834", jw: "chi-raq", poster: "chi-raq-2015", gradient: ["#8b4513","#cd853f"] },
+  { title: "BlacKkKlansman", year: 2018, temp: 85, rt: 96, isNew: true, imdb: "tt7349662", jw: "blackkklansman", poster: "blackkklansman-2018", gradient: ["#1a1a1a","#4a3520"] },
+  { title: "Da 5 Bloods", year: 2020, temp: 98, rt: 92, isNew: true, imdb: "tt9777644", jw: "da-5-bloods", poster: "da-5-bloods-2020", gradient: ["#2a4a1a","#5a8a30"] },
+  { title: "Highest 2 Lowest", year: 2025, temp: 72, rt: 83, isNew: true, imdb: "tt15671028", jw: "highest-2-lowest", poster: "highest-2-lowest-2025", gradient: ["#2a2a3a","#5a5a7a"] },
+];
+
+const CHART = {
+  left: 70, right: 760, top: 30, bottom: 470,
+  rtMin: 10, rtMax: 100,
+  tempMin: 25, tempMax: 105,
+};
+
+function rtToX(rt) {
+  return CHART.left + (rt - CHART.rtMin) / (CHART.rtMax - CHART.rtMin) * (CHART.right - CHART.left);
+}
+function tempToY(temp) {
+  return CHART.bottom - (temp - CHART.tempMin) / (CHART.tempMax - CHART.tempMin) * (CHART.bottom - CHART.top);
+}
+
+function buildChart() {
+  const svg = document.getElementById('chart');
+  let html = '';
+
+  // gradient background for chart area
+  html += `<defs>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#fff5ee" />
+      <stop offset="100%" stop-color="#ffeedd" />
+    </linearGradient>
+    <linearGradient id="thermoGrad" x1="0" y1="1" x2="0" y2="0">
+      <stop offset="0%" stop-color="#3a7abd" />
+      <stop offset="30%" stop-color="#f7a541" />
+      <stop offset="100%" stop-color="#cc2200" />
+    </linearGradient>
+  </defs>`;
+
+  html += `<rect x="${CHART.left}" y="${CHART.top}" width="${CHART.right-CHART.left}" height="${CHART.bottom-CHART.top}" fill="url(#bgGrad)" rx="4"/>`;
+
+  // Y gridlines & labels (temperature)
+  for (let t = 30; t <= 100; t += 10) {
+    const y = tempToY(t);
+    html += `<line x1="${CHART.left}" y1="${y}" x2="${CHART.right}" y2="${y}" class="grid-line"/>`;
+    html += `<text x="${CHART.left - 8}" y="${y + 4}" text-anchor="end" class="tick-label">${t}&deg;</text>`;
+  }
+
+  // X gridlines & labels (RT)
+  for (let r = 20; r <= 100; r += 10) {
+    const x = rtToX(r);
+    html += `<line x1="${x}" y1="${CHART.top}" x2="${x}" y2="${CHART.bottom}" class="grid-line"/>`;
+    html += `<text x="${x}" y="${CHART.bottom + 18}" text-anchor="middle" class="tick-label">${r}%</text>`;
+  }
+
+  // Axes
+  html += `<line x1="${CHART.left}" y1="${CHART.top}" x2="${CHART.left}" y2="${CHART.bottom}" stroke="#c9a88a" stroke-width="2"/>`;
+  html += `<line x1="${CHART.left}" y1="${CHART.bottom}" x2="${CHART.right}" y2="${CHART.bottom}" stroke="#c9a88a" stroke-width="2"/>`;
+
+  // Trend line (simple linear regression)
+  const n = films.length;
+  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  films.forEach(f => { sumX += f.rt; sumY += f.temp; sumXY += f.rt * f.temp; sumXX += f.rt * f.rt; });
+  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
+  const intercept = (sumY - slope * sumX) / n;
+  const trendX1 = CHART.rtMin + 5, trendX2 = CHART.rtMax;
+  const trendY1 = slope * trendX1 + intercept, trendY2 = slope * trendX2 + intercept;
+  html += `<line x1="${rtToX(trendX1)}" y1="${tempToY(trendY1)}" x2="${rtToX(trendX2)}" y2="${tempToY(trendY2)}" class="trend-line"/>`;
+
+  // Thermometer on the left
+  const thermoX = CHART.left - 48;
+  const thermoTop = CHART.top + 10;
+  const thermoBot = CHART.bottom - 10;
+  const thermoW = 14;
+  const bulbR = 14;
+  html += `<rect x="${thermoX - thermoW/2}" y="${thermoTop}" width="${thermoW}" height="${thermoBot - thermoTop}" rx="7" fill="#e8e0d8" stroke="#c9a88a" stroke-width="1.5"/>`;
+  html += `<rect x="${thermoX - thermoW/2 + 2}" y="${thermoTop + 4}" width="${thermoW - 4}" height="${thermoBot - thermoTop - 4}" rx="5" fill="url(#thermoGrad)"/>`;
+  html += `<circle cx="${thermoX}" cy="${thermoBot + bulbR - 4}" r="${bulbR}" fill="#cc2200" stroke="#c9a88a" stroke-width="1.5"/>`;
+  html += `<circle cx="${thermoX}" cy="${thermoBot + bulbR - 4}" r="${bulbR - 3}" fill="#e05525"/>`;
+
+  // Label placements to avoid overlap
+  const labelOffsets = computeLabelOffsets(films);
+
+  // Dots and labels
+  films.forEach((f, i) => {
+    const x = rtToX(f.rt);
+    const y = tempToY(f.temp);
+    const color = f.isNew ? '#2d8f55' : '#e05525';
+    const r = f.isNew ? 5.5 : 5;
+    const offset = labelOffsets[i];
+    const groupClass = f.isNew ? 'new-film' : 'original-film';
+
+    html += `<g class="${groupClass}" data-index="${i}">`;
+    html += `<circle cx="${x}" cy="${y}" r="${r}" fill="${color}" class="dot" stroke="#fff" stroke-width="1.5" data-index="${i}"/>`;
+
+    const labelX = x + offset.dx;
+    const labelY = y + offset.dy;
+    const anchor = offset.anchor || 'start';
+    html += `<text x="${labelX}" y="${labelY}" text-anchor="${anchor}" class="film-label" data-index="${i}">${escapeHtml(f.title.toUpperCase())}</text>`;
+    html += `</g>`;
+  });
+
+  svg.innerHTML = html;
+
+  // Click handlers
+  svg.querySelectorAll('.dot, .film-label').forEach(el => {
+    el.addEventListener('click', () => openModal(parseInt(el.dataset.index)));
+  });
+}
+
+function computeLabelOffsets(films) {
+  const offsets = [];
+  const positions = films.map(f => ({ x: rtToX(f.rt), y: tempToY(f.temp) }));
+
+  const defaults = {
+    "She's Gotta Have It": { dx: -8, dy: -12, anchor: 'end' },
+    "School Daze": { dx: -8, dy: -10, anchor: 'end' },
+    "Do the Right Thing": { dx: 8, dy: -14, anchor: 'start' },
+    "Mo' Better Blues": { dx: 8, dy: 14, anchor: 'start' },
+    "Jungle Fever": { dx: 8, dy: 16, anchor: 'start' },
+    "Malcolm X": { dx: 8, dy: -10, anchor: 'start' },
+    "Crooklyn": { dx: -8, dy: -12, anchor: 'end' },
+    "Clockers": { dx: 8, dy: -10, anchor: 'start' },
+    "Girl 6": { dx: -8, dy: -10, anchor: 'end' },
+    "Get on the Bus": { dx: 8, dy: 16, anchor: 'start' },
+    "He Got Game": { dx: -8, dy: -10, anchor: 'end' },
+    "Summer of Sam": { dx: -8, dy: -10, anchor: 'end' },
+    "Bamboozled": { dx: 8, dy: -10, anchor: 'start' },
+    "25th Hour": { dx: 8, dy: 16, anchor: 'start' },
+    "She Hate Me": { dx: -8, dy: -10, anchor: 'end' },
+    "Inside Man": { dx: 8, dy: -10, anchor: 'start' },
+    "Miracle at St. Anna": { dx: 8, dy: 16, anchor: 'start' },
+    "Red Hook Summer": { dx: -8, dy: 14, anchor: 'end' },
+    "Oldboy": { dx: 8, dy: 14, anchor: 'start' },
+    "Da Sweet Blood of Jesus": { dx: -8, dy: -10, anchor: 'end' },
+    "Chi-Raq": { dx: 8, dy: 16, anchor: 'start' },
+    "BlacKkKlansman": { dx: 8, dy: 16, anchor: 'start' },
+    "Da 5 Bloods": { dx: 8, dy: -10, anchor: 'start' },
+    "Highest 2 Lowest": { dx: 8, dy: 14, anchor: 'start' },
+  };
+
+  films.forEach(f => {
+    offsets.push(defaults[f.title] || { dx: 8, dy: -10, anchor: 'start' });
+  });
+
+  return offsets;
+}
+
+function escapeHtml(s) {
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
+}
+
+function openModal(index) {
+  const f = films[index];
+  const overlay = document.getElementById('modalOverlay');
+  const container = document.getElementById('modalPosterContainer');
+
+  // Poster placeholder with gradient
+  container.innerHTML = `<div class="modal-poster-placeholder" style="background: linear-gradient(135deg, ${f.gradient[0]}, ${f.gradient[1]})">
+    ${escapeHtml(f.title)}
+  </div>`;
+
+  document.getElementById('modalTitle').innerHTML = escapeHtml(f.title) + (f.isNew ? '<span class="new-badge">New</span>' : '');
+  document.getElementById('modalYear').textContent = f.year;
+  document.getElementById('modalRT').textContent = f.rt + '%';
+  document.getElementById('modalTemp').textContent = f.temp + '°F';
+
+  document.getElementById('modalLinks').innerHTML = `
+    <a href="https://www.imdb.com/title/${f.imdb}/" target="_blank" rel="noopener" class="modal-link imdb">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm4 18H6V4h7v5h5v11z"/></svg>
+      IMDb
+    </a>
+    <a href="https://www.justwatch.com/us/movie/${f.jw}" target="_blank" rel="noopener" class="modal-link justwatch">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>
+      JustWatch
+    </a>
+  `;
+
+  overlay.classList.add('active');
+  document.body.style.overflow = 'hidden';
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('active');
+  document.body.style.overflow = '';
+}
+
+document.getElementById('modalClose').addEventListener('click', closeModal);
+document.getElementById('modalOverlay').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeModal();
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Escape') closeModal();
+});
+
+buildChart();
+</script>
+
+</body>
+</html>
