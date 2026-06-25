@@ -62,7 +62,6 @@
   .chart-inner {
     position: relative;
     min-width: 800px;
-    aspect-ratio: 800 / 520;
   }
 
   .axis-label-y {
@@ -428,7 +427,7 @@
   <div class="chart-wrapper">
     <div class="chart-inner" id="chartInner">
       <div class="axis-label-y" id="axisLabelY">Temperature (&deg;F)</div>
-      <svg class="chart" id="chart" viewBox="0 0 800 520"></svg>
+      <svg class="chart" id="chart"></svg>
     </div>
     <div class="axis-label-x" id="axisLabelX">Rotten Tomatoes Rating</div>
     <div class="chart-controls">
@@ -536,21 +535,29 @@ function getXY(f) {
 
 function buildChart() {
   const svg = document.getElementById('chart');
+  const svgH = inverted ? 570 : 520;
+  svg.setAttribute('viewBox', `0 0 800 ${svgH}`);
   let html = '';
 
+  const tempGradDir = inverted
+    ? 'x1="0" y1="0" x2="1" y2="0"'
+    : 'x1="0" y1="1" x2="0" y2="0"';
+
   html += `<defs>
-    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0%" stop-color="#fff5ee" />
-      <stop offset="100%" stop-color="#ffeedd" />
+    <linearGradient id="tempBg" ${tempGradDir}>
+      <stop offset="0%" stop-color="#6a9fd8" stop-opacity="0.18" />
+      <stop offset="35%" stop-color="#ffffff" stop-opacity="0.05" />
+      <stop offset="100%" stop-color="#d44030" stop-opacity="0.18" />
     </linearGradient>
-    <linearGradient id="thermoGrad" x1="0" y1="1" x2="0" y2="0">
+    <linearGradient id="thermoGrad" ${tempGradDir}>
       <stop offset="0%" stop-color="#3a7abd" />
       <stop offset="30%" stop-color="#f7a541" />
       <stop offset="100%" stop-color="#cc2200" />
     </linearGradient>
   </defs>`;
 
-  html += `<rect x="${CHART.left}" y="${CHART.top}" width="${CHART.right-CHART.left}" height="${CHART.bottom-CHART.top}" fill="url(#bgGrad)" rx="4"/>`;
+  html += `<rect x="${CHART.left}" y="${CHART.top}" width="${CHART.right-CHART.left}" height="${CHART.bottom-CHART.top}" fill="#fef8f2" rx="4"/>`;
+  html += `<rect x="${CHART.left}" y="${CHART.top}" width="${CHART.right-CHART.left}" height="${CHART.bottom-CHART.top}" fill="url(#tempBg)" rx="4"/>`;
 
   if (inverted) {
     // Y = RT rating
@@ -596,7 +603,7 @@ function buildChart() {
   const tx1 = CHART.left + 10, tx2 = CHART.right - 10;
   html += `<line x1="${tx1}" y1="${slope * tx1 + intercept}" x2="${tx2}" y2="${slope * tx2 + intercept}" class="trend-line"/>`;
 
-  // Thermometer (only when temperature is on Y axis)
+  // Thermometer along the temperature axis
   if (!inverted) {
     const thermoX = CHART.left - 48;
     const thermoTop = CHART.top + 10;
@@ -607,6 +614,16 @@ function buildChart() {
     html += `<rect x="${thermoX - thermoW/2 + 2}" y="${thermoTop + 4}" width="${thermoW - 4}" height="${thermoBot - thermoTop - 4}" rx="5" fill="url(#thermoGrad)"/>`;
     html += `<circle cx="${thermoX}" cy="${thermoBot + bulbR - 4}" r="${bulbR}" fill="#cc2200" stroke="#c9a88a" stroke-width="1.5"/>`;
     html += `<circle cx="${thermoX}" cy="${thermoBot + bulbR - 4}" r="${bulbR - 3}" fill="#e05525"/>`;
+  } else {
+    const thermoY = CHART.bottom + 38;
+    const thermoLeft = CHART.left + 10;
+    const thermoRight = CHART.right - 30;
+    const thermoH = 14;
+    const bulbR = 14;
+    html += `<rect x="${thermoLeft}" y="${thermoY - thermoH/2}" width="${thermoRight - thermoLeft}" height="${thermoH}" rx="7" fill="#e8e0d8" stroke="#c9a88a" stroke-width="1.5"/>`;
+    html += `<rect x="${thermoLeft + 4}" y="${thermoY - thermoH/2 + 2}" width="${thermoRight - thermoLeft - 4}" height="${thermoH - 4}" rx="5" fill="url(#thermoGrad)"/>`;
+    html += `<circle cx="${thermoRight + bulbR - 4}" cy="${thermoY}" r="${bulbR}" fill="#cc2200" stroke="#c9a88a" stroke-width="1.5"/>`;
+    html += `<circle cx="${thermoRight + bulbR - 4}" cy="${thermoY}" r="${bulbR - 3}" fill="#e05525"/>`;
   }
 
   const labelOffsets = computeLabelOffsets(films);
