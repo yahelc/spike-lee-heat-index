@@ -156,11 +156,47 @@
     pointer-events: none;
   }
 
+  .chart-controls {
+    display: flex;
+    justify-content: center;
+    margin-top: 0.75rem;
+  }
+
+  .axis-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    background: #f5ebe0;
+    border: 1px solid #d4b8a0;
+    border-radius: 8px;
+    padding: 0.4rem 0.9rem;
+    cursor: pointer;
+    font-family: 'Source Sans 3', sans-serif;
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: #7a5030;
+    transition: background 0.15s, border-color 0.15s;
+    user-select: none;
+  }
+
+  .axis-toggle:hover {
+    background: #eeddc8;
+    border-color: #b5946e;
+  }
+
+  .axis-toggle svg {
+    transition: transform 0.3s ease;
+  }
+
+  .axis-toggle.inverted svg {
+    transform: rotate(90deg);
+  }
+
   .legend {
     display: flex;
     justify-content: center;
     gap: 2rem;
-    margin-top: 1rem;
+    margin-top: 0.5rem;
     font-size: 0.85rem;
     flex-wrap: wrap;
   }
@@ -391,10 +427,16 @@
 <div class="chart-container">
   <div class="chart-wrapper">
     <div class="chart-inner" id="chartInner">
-      <div class="axis-label-y">Temperature (&deg;F)</div>
+      <div class="axis-label-y" id="axisLabelY">Temperature (&deg;F)</div>
       <svg class="chart" id="chart" viewBox="0 0 800 520"></svg>
     </div>
-    <div class="axis-label-x">Rotten Tomatoes Rating</div>
+    <div class="axis-label-x" id="axisLabelX">Rotten Tomatoes Rating</div>
+    <div class="chart-controls">
+      <button class="axis-toggle" id="axisToggle" title="Swap axes">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M7 16V4m0 0L3 8m4-4l4 4M17 8v12m0 0l4-4m-4 4l-4-4"/></svg>
+        Swap axes
+      </button>
+    </div>
     <div class="legend">
       <div class="legend-item"><span class="legend-dot original"></span> Original films (2012 chart)</div>
       <div class="legend-item"><span class="legend-dot new"></span> Added in this update</div>
@@ -470,18 +512,32 @@ const CHART = {
   tempMin: 25, tempMax: 105,
 };
 
-function rtToX(rt) {
-  return CHART.left + (rt - CHART.rtMin) / (CHART.rtMax - CHART.rtMin) * (CHART.right - CHART.left);
+let inverted = false;
+
+function valToX(val, min, max) {
+  return CHART.left + (val - min) / (max - min) * (CHART.right - CHART.left);
 }
-function tempToY(temp) {
-  return CHART.bottom - (temp - CHART.tempMin) / (CHART.tempMax - CHART.tempMin) * (CHART.bottom - CHART.top);
+function valToY(val, min, max) {
+  return CHART.bottom - (val - min) / (max - min) * (CHART.bottom - CHART.top);
+}
+
+function getXY(f) {
+  if (inverted) {
+    return {
+      x: valToX(f.temp, CHART.tempMin, CHART.tempMax),
+      y: valToY(f.rt, CHART.rtMin, CHART.rtMax),
+    };
+  }
+  return {
+    x: valToX(f.rt, CHART.rtMin, CHART.rtMax),
+    y: valToY(f.temp, CHART.tempMin, CHART.tempMax),
+  };
 }
 
 function buildChart() {
   const svg = document.getElementById('chart');
   let html = '';
 
-  // gradient background for chart area
   html += `<defs>
     <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
       <stop offset="0%" stop-color="#fff5ee" />
@@ -496,52 +552,67 @@ function buildChart() {
 
   html += `<rect x="${CHART.left}" y="${CHART.top}" width="${CHART.right-CHART.left}" height="${CHART.bottom-CHART.top}" fill="url(#bgGrad)" rx="4"/>`;
 
-  // Y gridlines & labels (temperature)
-  for (let t = 30; t <= 100; t += 10) {
-    const y = tempToY(t);
-    html += `<line x1="${CHART.left}" y1="${y}" x2="${CHART.right}" y2="${y}" class="grid-line"/>`;
-    html += `<text x="${CHART.left - 8}" y="${y + 4}" text-anchor="end" class="tick-label">${t}&deg;</text>`;
-  }
-
-  // X gridlines & labels (RT)
-  for (let r = 20; r <= 100; r += 10) {
-    const x = rtToX(r);
-    html += `<line x1="${x}" y1="${CHART.top}" x2="${x}" y2="${CHART.bottom}" class="grid-line"/>`;
-    html += `<text x="${x}" y="${CHART.bottom + 18}" text-anchor="middle" class="tick-label">${r}%</text>`;
+  if (inverted) {
+    // Y = RT rating
+    for (let r = 20; r <= 100; r += 10) {
+      const y = valToY(r, CHART.rtMin, CHART.rtMax);
+      html += `<line x1="${CHART.left}" y1="${y}" x2="${CHART.right}" y2="${y}" class="grid-line"/>`;
+      html += `<text x="${CHART.left - 8}" y="${y + 4}" text-anchor="end" class="tick-label">${r}%</text>`;
+    }
+    // X = Temperature
+    for (let t = 30; t <= 100; t += 10) {
+      const x = valToX(t, CHART.tempMin, CHART.tempMax);
+      html += `<line x1="${x}" y1="${CHART.top}" x2="${x}" y2="${CHART.bottom}" class="grid-line"/>`;
+      html += `<text x="${x}" y="${CHART.bottom + 18}" text-anchor="middle" class="tick-label">${t}&deg;</text>`;
+    }
+  } else {
+    // Y = Temperature
+    for (let t = 30; t <= 100; t += 10) {
+      const y = valToY(t, CHART.tempMin, CHART.tempMax);
+      html += `<line x1="${CHART.left}" y1="${y}" x2="${CHART.right}" y2="${y}" class="grid-line"/>`;
+      html += `<text x="${CHART.left - 8}" y="${y + 4}" text-anchor="end" class="tick-label">${t}&deg;</text>`;
+    }
+    // X = RT rating
+    for (let r = 20; r <= 100; r += 10) {
+      const x = valToX(r, CHART.rtMin, CHART.rtMax);
+      html += `<line x1="${x}" y1="${CHART.top}" x2="${x}" y2="${CHART.bottom}" class="grid-line"/>`;
+      html += `<text x="${x}" y="${CHART.bottom + 18}" text-anchor="middle" class="tick-label">${r}%</text>`;
+    }
   }
 
   // Axes
   html += `<line x1="${CHART.left}" y1="${CHART.top}" x2="${CHART.left}" y2="${CHART.bottom}" stroke="#c9a88a" stroke-width="2"/>`;
   html += `<line x1="${CHART.left}" y1="${CHART.bottom}" x2="${CHART.right}" y2="${CHART.bottom}" stroke="#c9a88a" stroke-width="2"/>`;
 
-  // Trend line (simple linear regression)
+  // Trend line
   const n = films.length;
   let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
-  films.forEach(f => { sumX += f.rt; sumY += f.temp; sumXY += f.rt * f.temp; sumXX += f.rt * f.rt; });
+  films.forEach(f => {
+    const p = getXY(f);
+    sumX += p.x; sumY += p.y; sumXY += p.x * p.y; sumXX += p.x * p.x;
+  });
   const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
   const intercept = (sumY - slope * sumX) / n;
-  const trendX1 = CHART.rtMin + 5, trendX2 = CHART.rtMax;
-  const trendY1 = slope * trendX1 + intercept, trendY2 = slope * trendX2 + intercept;
-  html += `<line x1="${rtToX(trendX1)}" y1="${tempToY(trendY1)}" x2="${rtToX(trendX2)}" y2="${tempToY(trendY2)}" class="trend-line"/>`;
+  const tx1 = CHART.left + 10, tx2 = CHART.right - 10;
+  html += `<line x1="${tx1}" y1="${slope * tx1 + intercept}" x2="${tx2}" y2="${slope * tx2 + intercept}" class="trend-line"/>`;
 
-  // Thermometer on the left
-  const thermoX = CHART.left - 48;
-  const thermoTop = CHART.top + 10;
-  const thermoBot = CHART.bottom - 10;
-  const thermoW = 14;
-  const bulbR = 14;
-  html += `<rect x="${thermoX - thermoW/2}" y="${thermoTop}" width="${thermoW}" height="${thermoBot - thermoTop}" rx="7" fill="#e8e0d8" stroke="#c9a88a" stroke-width="1.5"/>`;
-  html += `<rect x="${thermoX - thermoW/2 + 2}" y="${thermoTop + 4}" width="${thermoW - 4}" height="${thermoBot - thermoTop - 4}" rx="5" fill="url(#thermoGrad)"/>`;
-  html += `<circle cx="${thermoX}" cy="${thermoBot + bulbR - 4}" r="${bulbR}" fill="#cc2200" stroke="#c9a88a" stroke-width="1.5"/>`;
-  html += `<circle cx="${thermoX}" cy="${thermoBot + bulbR - 4}" r="${bulbR - 3}" fill="#e05525"/>`;
+  // Thermometer (only when temperature is on Y axis)
+  if (!inverted) {
+    const thermoX = CHART.left - 48;
+    const thermoTop = CHART.top + 10;
+    const thermoBot = CHART.bottom - 10;
+    const thermoW = 14;
+    const bulbR = 14;
+    html += `<rect x="${thermoX - thermoW/2}" y="${thermoTop}" width="${thermoW}" height="${thermoBot - thermoTop}" rx="7" fill="#e8e0d8" stroke="#c9a88a" stroke-width="1.5"/>`;
+    html += `<rect x="${thermoX - thermoW/2 + 2}" y="${thermoTop + 4}" width="${thermoW - 4}" height="${thermoBot - thermoTop - 4}" rx="5" fill="url(#thermoGrad)"/>`;
+    html += `<circle cx="${thermoX}" cy="${thermoBot + bulbR - 4}" r="${bulbR}" fill="#cc2200" stroke="#c9a88a" stroke-width="1.5"/>`;
+    html += `<circle cx="${thermoX}" cy="${thermoBot + bulbR - 4}" r="${bulbR - 3}" fill="#e05525"/>`;
+  }
 
-  // Label placements to avoid overlap
   const labelOffsets = computeLabelOffsets(films);
 
-  // Dots and labels
   films.forEach((f, i) => {
-    const x = rtToX(f.rt);
-    const y = tempToY(f.temp);
+    const { x, y } = getXY(f);
     const color = f.isNew ? '#2d8f55' : '#e05525';
     const r = f.isNew ? 5.5 : 5;
     const offset = labelOffsets[i];
@@ -559,48 +630,72 @@ function buildChart() {
 
   svg.innerHTML = html;
 
-  // Click handlers
+  // Update axis labels
+  document.getElementById('axisLabelY').textContent = inverted ? 'Rotten Tomatoes Rating' : 'Temperature (°F)';
+  document.getElementById('axisLabelX').textContent = inverted ? 'Temperature (°F)' : 'Rotten Tomatoes Rating';
+
   svg.querySelectorAll('.dot, .film-label').forEach(el => {
     el.addEventListener('click', () => openModal(parseInt(el.dataset.index)));
   });
 }
 
+const labelOffsetsNormal = {
+  "She's Gotta Have It": { dx: -8, dy: -12, anchor: 'end' },
+  "School Daze": { dx: -8, dy: -10, anchor: 'end' },
+  "Do the Right Thing": { dx: 8, dy: -14, anchor: 'start' },
+  "Mo' Better Blues": { dx: 8, dy: 14, anchor: 'start' },
+  "Jungle Fever": { dx: 8, dy: 16, anchor: 'start' },
+  "Malcolm X": { dx: 8, dy: -10, anchor: 'start' },
+  "Crooklyn": { dx: -8, dy: -12, anchor: 'end' },
+  "Clockers": { dx: 8, dy: -10, anchor: 'start' },
+  "Girl 6": { dx: -8, dy: -10, anchor: 'end' },
+  "Get on the Bus": { dx: 8, dy: 16, anchor: 'start' },
+  "He Got Game": { dx: -8, dy: -10, anchor: 'end' },
+  "Summer of Sam": { dx: -8, dy: -10, anchor: 'end' },
+  "Bamboozled": { dx: 8, dy: -10, anchor: 'start' },
+  "25th Hour": { dx: 8, dy: 16, anchor: 'start' },
+  "She Hate Me": { dx: -8, dy: -10, anchor: 'end' },
+  "Inside Man": { dx: 8, dy: -10, anchor: 'start' },
+  "Miracle at St. Anna": { dx: 8, dy: 16, anchor: 'start' },
+  "Red Hook Summer": { dx: -8, dy: 14, anchor: 'end' },
+  "Oldboy": { dx: 8, dy: 14, anchor: 'start' },
+  "Da Sweet Blood of Jesus": { dx: -8, dy: -10, anchor: 'end' },
+  "Chi-Raq": { dx: 8, dy: 16, anchor: 'start' },
+  "BlacKkKlansman": { dx: 8, dy: 16, anchor: 'start' },
+  "Da 5 Bloods": { dx: 8, dy: -10, anchor: 'start' },
+  "Highest 2 Lowest": { dx: 8, dy: 14, anchor: 'start' },
+};
+
+const labelOffsetsInverted = {
+  "She's Gotta Have It": { dx: 8, dy: -10, anchor: 'start' },
+  "School Daze": { dx: 8, dy: 14, anchor: 'start' },
+  "Do the Right Thing": { dx: 8, dy: -10, anchor: 'start' },
+  "Mo' Better Blues": { dx: -8, dy: -10, anchor: 'end' },
+  "Jungle Fever": { dx: 8, dy: -10, anchor: 'start' },
+  "Malcolm X": { dx: -8, dy: -10, anchor: 'end' },
+  "Crooklyn": { dx: 8, dy: -10, anchor: 'start' },
+  "Clockers": { dx: 8, dy: 14, anchor: 'start' },
+  "Girl 6": { dx: 8, dy: 14, anchor: 'start' },
+  "Get on the Bus": { dx: -8, dy: 14, anchor: 'end' },
+  "He Got Game": { dx: 8, dy: 14, anchor: 'start' },
+  "Summer of Sam": { dx: 8, dy: 14, anchor: 'start' },
+  "Bamboozled": { dx: 8, dy: 14, anchor: 'start' },
+  "25th Hour": { dx: -8, dy: -10, anchor: 'end' },
+  "She Hate Me": { dx: 8, dy: 14, anchor: 'start' },
+  "Inside Man": { dx: -8, dy: -10, anchor: 'end' },
+  "Miracle at St. Anna": { dx: -8, dy: 14, anchor: 'end' },
+  "Red Hook Summer": { dx: 8, dy: -10, anchor: 'start' },
+  "Oldboy": { dx: -8, dy: -10, anchor: 'end' },
+  "Da Sweet Blood of Jesus": { dx: -8, dy: 14, anchor: 'end' },
+  "Chi-Raq": { dx: -8, dy: -10, anchor: 'end' },
+  "BlacKkKlansman": { dx: 8, dy: -10, anchor: 'start' },
+  "Da 5 Bloods": { dx: -8, dy: -10, anchor: 'end' },
+  "Highest 2 Lowest": { dx: 8, dy: -10, anchor: 'start' },
+};
+
 function computeLabelOffsets(films) {
-  const offsets = [];
-  const positions = films.map(f => ({ x: rtToX(f.rt), y: tempToY(f.temp) }));
-
-  const defaults = {
-    "She's Gotta Have It": { dx: -8, dy: -12, anchor: 'end' },
-    "School Daze": { dx: -8, dy: -10, anchor: 'end' },
-    "Do the Right Thing": { dx: 8, dy: -14, anchor: 'start' },
-    "Mo' Better Blues": { dx: 8, dy: 14, anchor: 'start' },
-    "Jungle Fever": { dx: 8, dy: 16, anchor: 'start' },
-    "Malcolm X": { dx: 8, dy: -10, anchor: 'start' },
-    "Crooklyn": { dx: -8, dy: -12, anchor: 'end' },
-    "Clockers": { dx: 8, dy: -10, anchor: 'start' },
-    "Girl 6": { dx: -8, dy: -10, anchor: 'end' },
-    "Get on the Bus": { dx: 8, dy: 16, anchor: 'start' },
-    "He Got Game": { dx: -8, dy: -10, anchor: 'end' },
-    "Summer of Sam": { dx: -8, dy: -10, anchor: 'end' },
-    "Bamboozled": { dx: 8, dy: -10, anchor: 'start' },
-    "25th Hour": { dx: 8, dy: 16, anchor: 'start' },
-    "She Hate Me": { dx: -8, dy: -10, anchor: 'end' },
-    "Inside Man": { dx: 8, dy: -10, anchor: 'start' },
-    "Miracle at St. Anna": { dx: 8, dy: 16, anchor: 'start' },
-    "Red Hook Summer": { dx: -8, dy: 14, anchor: 'end' },
-    "Oldboy": { dx: 8, dy: 14, anchor: 'start' },
-    "Da Sweet Blood of Jesus": { dx: -8, dy: -10, anchor: 'end' },
-    "Chi-Raq": { dx: 8, dy: 16, anchor: 'start' },
-    "BlacKkKlansman": { dx: 8, dy: 16, anchor: 'start' },
-    "Da 5 Bloods": { dx: 8, dy: -10, anchor: 'start' },
-    "Highest 2 Lowest": { dx: 8, dy: 14, anchor: 'start' },
-  };
-
-  films.forEach(f => {
-    offsets.push(defaults[f.title] || { dx: 8, dy: -10, anchor: 'start' });
-  });
-
-  return offsets;
+  const table = inverted ? labelOffsetsInverted : labelOffsetsNormal;
+  return films.map(f => table[f.title] || { dx: 8, dy: -10, anchor: 'start' });
 }
 
 function escapeHtml(s) {
@@ -648,6 +743,12 @@ document.getElementById('modalOverlay').addEventListener('click', (e) => {
 });
 document.addEventListener('keydown', (e) => {
   if (e.key === 'Escape') closeModal();
+});
+
+document.getElementById('axisToggle').addEventListener('click', () => {
+  inverted = !inverted;
+  document.getElementById('axisToggle').classList.toggle('inverted', inverted);
+  buildChart();
 });
 
 buildChart();
