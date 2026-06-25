@@ -391,12 +391,51 @@
     line-height: 1.7;
   }
 
-  footer p {
+  footer p, footer .footer-stats {
     background: rgba(0,0,0,0.15);
     border-radius: 10px;
     padding: 1.25rem 1.5rem;
     color: #fff3e0;
     font-size: 0.85rem;
+  }
+
+  .footer-stats {
+    margin-bottom: 0.75rem;
+    text-align: left;
+  }
+
+  .footer-stats h3 {
+    font-family: 'Oswald', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #fff;
+    margin-bottom: 0.6rem;
+  }
+
+  .stats-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.4rem 1.5rem;
+  }
+
+  .stat-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+  }
+
+  .stat-label {
+    color: #ffd9b3;
+    font-size: 0.8rem;
+  }
+
+  .stat-value {
+    font-family: 'Oswald', sans-serif;
+    font-weight: 600;
+    color: #fff;
+    font-size: 0.95rem;
   }
 
   footer a {
@@ -466,6 +505,7 @@
 </div>
 
 <footer>
+  <div class="footer-stats" id="footerStats"></div>
   <p>
     This is an updated, interactive version of
     <a href="https://web.archive.org/web/20130221231939/http://www.slate.com/blogs/browbeat/2012/08/10/the_spike_lee_heat_index_the_hotter_the_spike_lee_movie_the_better_it_is_.html" target="_blank" rel="noopener">
@@ -591,17 +631,63 @@ function buildChart() {
   html += `<line x1="${CHART.left}" y1="${CHART.top}" x2="${CHART.left}" y2="${CHART.bottom}" stroke="#c9a88a" stroke-width="2"/>`;
   html += `<line x1="${CHART.left}" y1="${CHART.bottom}" x2="${CHART.right}" y2="${CHART.bottom}" stroke="#c9a88a" stroke-width="2"/>`;
 
-  // Trend line
+  // Linear regression on raw data (temp predicting RT)
   const n = films.length;
-  let sumX = 0, sumY = 0, sumXY = 0, sumXX = 0;
+  let sT = 0, sR = 0, sTR = 0, sTT = 0, sRR = 0;
+  films.forEach(f => { sT += f.temp; sR += f.rt; sTR += f.temp * f.rt; sTT += f.temp * f.temp; sRR += f.rt * f.rt; });
+  const meanT = sT / n, meanR = sR / n;
+  const ssT = sTT - n * meanT * meanT;
+  const ssR = sRR - n * meanR * meanR;
+  const ssTR = sTR - n * meanT * meanR;
+  const r = ssTR / Math.sqrt(ssT * ssR);
+  const rSq = r * r;
+  const slopeRaw = ssTR / ssT;
+  const interceptRaw = meanR - slopeRaw * meanT;
+
+  // Draw trend line using pixel coords
+  const tMin = CHART.tempMin + 5, tMax = CHART.tempMax;
+  const rtAtTMin = slopeRaw * tMin + interceptRaw;
+  const rtAtTMax = slopeRaw * tMax + interceptRaw;
+  let lx1, ly1, lx2, ly2;
+  if (inverted) {
+    lx1 = valToX(tMin, CHART.tempMin, CHART.tempMax);
+    ly1 = valToY(rtAtTMin, CHART.rtMin, CHART.rtMax);
+    lx2 = valToX(tMax, CHART.tempMin, CHART.tempMax);
+    ly2 = valToY(rtAtTMax, CHART.rtMin, CHART.rtMax);
+  } else {
+    lx1 = valToX(rtAtTMin, CHART.rtMin, CHART.rtMax);
+    ly1 = valToY(tMin, CHART.tempMin, CHART.tempMax);
+    lx2 = valToX(rtAtTMax, CHART.rtMin, CHART.rtMax);
+    ly2 = valToY(tMax, CHART.tempMin, CHART.tempMax);
+  }
+  html += `<line x1="${lx1}" y1="${ly1}" x2="${lx2}" y2="${ly2}" class="trend-line"/>`;
+
+  // Residual standard error
+  let ssResid = 0;
   films.forEach(f => {
-    const p = getXY(f);
-    sumX += p.x; sumY += p.y; sumXY += p.x * p.y; sumXX += p.x * p.x;
+    const predicted = slopeRaw * f.temp + interceptRaw;
+    ssResid += (f.rt - predicted) * (f.rt - predicted);
   });
-  const slope = (n * sumXY - sumX * sumY) / (n * sumXX - sumX * sumX);
-  const intercept = (sumY - slope * sumX) / n;
-  const tx1 = CHART.left + 10, tx2 = CHART.right - 10;
-  html += `<line x1="${tx1}" y1="${slope * tx1 + intercept}" x2="${tx2}" y2="${slope * tx2 + intercept}" class="trend-line"/>`;
+  const rse = Math.sqrt(ssResid / (n - 2));
+
+  // F-statistic
+  const ssReg = ssTR * ssTR / ssT;
+  const fStat = ssReg / (ssResid / (n - 2));
+  const pApprox = fStatToP(fStat, 1, n - 2);
+
+  // Update footer stats
+  document.getElementById('footerStats').innerHTML = `
+    <h3>Linear Model: RT Score ~ Temperature</h3>
+    <div class="stats-grid">
+      <div class="stat-row"><span class="stat-label">Slope</span><span class="stat-value">${slopeRaw.toFixed(3)}% / °F</span></div>
+      <div class="stat-row"><span class="stat-label">Intercept</span><span class="stat-value">${interceptRaw.toFixed(1)}%</span></div>
+      <div class="stat-row"><span class="stat-label">Pearson r</span><span class="stat-value">${r.toFixed(3)}</span></div>
+      <div class="stat-row"><span class="stat-label">R²</span><span class="stat-value">${rSq.toFixed(3)}</span></div>
+      <div class="stat-row"><span class="stat-label">Residual Std. Error</span><span class="stat-value">${rse.toFixed(1)}% (${n - 2} df)</span></div>
+      <div class="stat-row"><span class="stat-label">F-statistic</span><span class="stat-value">${fStat.toFixed(2)} (p ${pApprox < 0.001 ? '< 0.001' : '= ' + pApprox.toFixed(3)})</span></div>
+      <div class="stat-row"><span class="stat-label">n</span><span class="stat-value">${n} films</span></div>
+    </div>
+  `;
 
   // Thermometer along the temperature axis
   if (!inverted) {
@@ -713,6 +799,44 @@ const labelOffsetsInverted = {
 function computeLabelOffsets(films) {
   const table = inverted ? labelOffsetsInverted : labelOffsetsNormal;
   return films.map(f => table[f.title] || { dx: 8, dy: -10, anchor: 'start' });
+}
+
+function fStatToP(f, d1, d2) {
+  // Regularized incomplete beta function approximation for F-test p-value
+  const x = d2 / (d2 + d1 * f);
+  return betaIncomplete(d2 / 2, d1 / 2, x);
+}
+
+function betaIncomplete(a, b, x) {
+  if (x === 0 || x === 1) return x === 1 ? 1 : 0;
+  const lnBeta = lgamma(a) + lgamma(b) - lgamma(a + b);
+  const prefix = Math.exp(Math.log(x) * a + Math.log(1 - x) * b - lnBeta) / a;
+  // Continued fraction (Lentz's method)
+  let f0 = 1, c = 1, d = 1 - (a + b) * x / (a + 1);
+  if (Math.abs(d) < 1e-30) d = 1e-30;
+  d = 1 / d; f0 = d;
+  for (let m = 1; m <= 200; m++) {
+    let num = m * (b - m) * x / ((a + 2*m - 1) * (a + 2*m));
+    d = 1 + num * d; if (Math.abs(d) < 1e-30) d = 1e-30; d = 1/d;
+    c = 1 + num / c; if (Math.abs(c) < 1e-30) c = 1e-30;
+    f0 *= d * c;
+    num = -(a + m) * (a + b + m) * x / ((a + 2*m) * (a + 2*m + 1));
+    d = 1 + num * d; if (Math.abs(d) < 1e-30) d = 1e-30; d = 1/d;
+    c = 1 + num / c; if (Math.abs(c) < 1e-30) c = 1e-30;
+    const delta = d * c; f0 *= delta;
+    if (Math.abs(delta - 1) < 1e-10) break;
+  }
+  return prefix * f0;
+}
+
+function lgamma(x) {
+  const c = [76.18009172947146,-86.50532032941677,24.01409824083091,
+    -1.231739572450155,0.001208650973866179,-5.395239384953e-06];
+  let y = x, tmp = x + 5.5;
+  tmp -= (x + 0.5) * Math.log(tmp);
+  let ser = 1.000000000190015;
+  for (let j = 0; j < 6; j++) ser += c[j] / ++y;
+  return -tmp + Math.log(2.5066282746310005 * ser / x);
 }
 
 function escapeHtml(s) {
