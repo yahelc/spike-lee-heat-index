@@ -62,7 +62,7 @@
   .chart-inner {
     position: relative;
     min-width: 800px;
-    height: 560px;
+    aspect-ratio: 800 / 520;
   }
 
   .axis-label-y {
@@ -350,16 +350,23 @@
 
   footer {
     text-align: center;
-    padding: 2rem 1rem 3rem;
+    padding: 2.5rem 1.5rem 3rem;
+    max-width: 640px;
+    margin: 0 auto;
+    line-height: 1.7;
+  }
+
+  footer p {
+    background: rgba(0,0,0,0.15);
+    border-radius: 10px;
+    padding: 1.25rem 1.5rem;
     color: #fff3e0;
     font-size: 0.85rem;
-    max-width: 700px;
-    margin: 0 auto;
-    line-height: 1.6;
   }
 
   footer a {
     color: #fff;
+    font-weight: 600;
     text-decoration: underline;
     text-underline-offset: 2px;
   }
@@ -386,8 +393,8 @@
     <div class="chart-inner" id="chartInner">
       <div class="axis-label-y">Temperature (&deg;F)</div>
       <svg class="chart" id="chart" viewBox="0 0 800 520"></svg>
-      <div class="axis-label-x">Rotten Tomatoes Rating</div>
     </div>
+    <div class="axis-label-x">Rotten Tomatoes Rating</div>
     <div class="legend">
       <div class="legend-item"><span class="legend-dot original"></span> Original films (2012 chart)</div>
       <div class="legend-item"><span class="legend-dot new"></span> Added in this update</div>
